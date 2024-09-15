@@ -308,8 +308,24 @@ async def on_message(message: discord.Message) -> None:
     except Exception as e:
         myLogger.error(f"An error has occurred: {e}")
 
+@bot.tree.command(name="sendmessage", description="Send a custom message to a specific channel or the current channel if not specified")
+@app_commands.describe(channel="The channel where the message will be sent", message="The message you want to send")
+async def sendmessage(interaction: discord.Interaction, message: str, channel: discord.TextChannel = None):
+    if interaction.user.id == ENABLED_USER_ID:
+        # Use the current channel if no channel is specified
+        if channel is None:
+            channel = interaction.channel
 
-
+        # Send the message to the specified or current channel
+        await channel.send(message)
+        await interaction.response.send_message(f"Message sent to {channel.mention}: {message}", ephemeral=True)
+    else:
+        await interaction.response.send_message("You are not authorized to use this command.", ephemeral=True)
+    
+@bot.tree.command(name="ping", description="Get the bot's latency")
+async def ping(interaction: discord.Interaction):
+    
+    await interaction.response.send_message(f"Pong! Latency: {round(bot.latency * 1000)}ms", ephemeral=True)
 
 @bot.tree.command(name="get-prefix", description="Gets the bots prefix")
 async def get_prefix(interaction: discord.Interaction):
