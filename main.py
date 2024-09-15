@@ -209,19 +209,20 @@ async def on_ready():
     myLogger.info("Commands synced")
     
     channel = bot.get_channel(1284646235290075176)  # Replace with your channel ID
-    view = RoleButtons()
+    if channel:
+        view = RoleButtons()
 
-    # Delete all messages in the channel
-    await delete_all_messages(channel)
+        # Delete all messages in the channel
+        await delete_all_messages(channel)
 
-    embed = discord.Embed(
-        title="Role Selection",
-        description="Click the buttons below to assign or remove roles from yourself.",
-        color=discord.Color.blue()
-    )
-    embed.add_field(name="Roles", value="1. YouTuber\n2. Thoosie\n3. QOTD", inline=False)
+        embed = discord.Embed(
+            title="Role Selection",
+            description="Click the buttons below to assign or remove roles from yourself.",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Roles", value="1. YouTuber\n2. Thoosie\n3. QOTD", inline=False)
 
-    await channel.send(embed=embed, view=view)
+        await channel.send(embed=embed, view=view)
     
     
     
@@ -237,6 +238,15 @@ async def on_ready():
     else:
         myLogger.error("Could not send verification message because VERIFY_CHANNEL is None or not set correctly.")
 
+    rex_channel = bot.get_channel(1284214603856744549)
+    if rex_channel:
+        embed = discord.Embed(
+            title="Bot Status",
+            description="The bot is currently **online**.",
+            color=discord.Color.green()
+        )
+        await rex_channel.send(embed=embed)
+    
 
     with open('channels4_profile (2).jpg', 'rb') as f:
         avatar_bytes = f.read()
@@ -326,6 +336,53 @@ async def sendmessage(interaction: discord.Interaction, message: str, channel: d
 async def ping(interaction: discord.Interaction):
     
     await interaction.response.send_message(f"Pong! Latency: {round(bot.latency * 1000)}ms", ephemeral=True)
+
+
+
+@bot.tree.command(name="eos", description="This command puts the bot offline.")
+async def eos(interaction: discord.Interaction):
+    
+    if interaction.user.id == ENABLED_USER_ID:
+
+        # Create an embed for the offline message
+        embed = discord.Embed(
+            title="Bot Status",
+            description="The bot is currently **offline**.",
+            color=discord.Color.red()
+        )
+        
+        
+        # List of channels to send the offline message
+        special_channels = [1284214603856744549]
+        
+        for ch_id in special_channels:
+            channel = bot.get_channel(ch_id)
+            if channel:
+                await channel.send(embed=embed)
+        
+        
+        # List of channels to send the offline message
+        offline_channels = [1284184528323215411, 1284646235290075176]
+        
+        for ch_id in offline_channels:
+            channel = bot.get_channel(ch_id)
+            if channel:
+                async for message in channel.history():
+                    await message.delete()
+                await channel.send(embed=embed)
+
+        response_message = interaction.response.send_message("All tasks complete. Logging off...", ephemeral=True)
+        
+        
+        # Shut down the bot
+        await bot.close()
+        await quit()
+    else:
+        await interaction.response.send_message("You are not authorized to use this command.", ephemeral=True)
+
+
+
+
 
 @bot.tree.command(name="get-prefix", description="Gets the bots prefix")
 async def get_prefix(interaction: discord.Interaction):
