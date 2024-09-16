@@ -200,14 +200,13 @@ async def on_ready():
     myLogger.info(f'Bot ID: {bot.user.id}')
     myLogger.info(' ')
 
-    
     await bot.change_presence(status=discord.Status.dnd,
                               activity=discord.Activity(type=discord.ActivityType.watching, name="Resort Explorer"))
 
-    #bot.loop.create_task(send_timed_message())
-    await bot.tree.sync()  # Syncs the commands with Discord
+    await bot.tree.sync()  # Sync commands with Discord
     myLogger.info("Commands synced")
-    
+
+    # Role selection
     channel = bot.get_channel(1284646235290075176)  # Replace with your channel ID
     if channel:
         view = RoleButtons()
@@ -223,9 +222,8 @@ async def on_ready():
         embed.add_field(name="Roles", value="1. YouTuber\n2. Thoosie\n3. QOTD", inline=False)
 
         await channel.send(embed=embed, view=view)
-    
-    
-    
+
+    # Verification
     verify_channel = bot.get_channel(VERIFY_CHANNEL)
     if verify_channel:
         try:
@@ -238,6 +236,7 @@ async def on_ready():
     else:
         myLogger.error("Could not send verification message because VERIFY_CHANNEL is None or not set correctly.")
 
+    # Bot status update
     rex_channel = bot.get_channel(1284214603856744549)
     if rex_channel:
         embed = discord.Embed(
@@ -246,13 +245,24 @@ async def on_ready():
             color=discord.Color.green()
         )
         await rex_channel.send(embed=embed)
-    
 
-    with open('channels4_profile (2).jpg', 'rb') as f:
-        avatar_bytes = f.read()
-        f.close()
-    await bot.user.edit(avatar=avatar_bytes)
-    await bot.user.edit(username="RE bot")
+    # Change avatar (only if necessary)
+    try:
+        with open('channels4_profile (2).jpg', 'rb') as f:
+            avatar_bytes = f.read()
+
+        # Check if the current avatar is already set to avoid unnecessary changes
+        if bot.user.avatar != avatar_bytes:
+            await bot.user.edit(avatar=avatar_bytes)
+            await bot.user.edit(username="RE bot")
+        else:
+            myLogger.info("Avatar is already set to the desired one.")
+    except discord.errors.HTTPException as e:
+        if e.code == 50035:
+            myLogger.error("You are changing the avatar too fast. Try again later.")
+        else:
+            myLogger.error(f"An error occurred while changing avatar: {e}")
+
 
 
 
@@ -868,6 +878,36 @@ async def on_guild_role_delete(role):
 
 
 
+
+
+
+def get_level_and_remaining_exp(xp):
+    """
+    Calculates the level, remaining XP for the current level, 
+    and the XP required for the next level based on the increasing XP requirement.
+    
+    :param xp: The current XP of the user.
+    :return: A tuple containing the user's level, the remaining XP, and XP needed for the next level.
+    """
+    level = 1
+    total_xp_for_next_level = 50  # Initial XP required for level 2
+    total_xp_for_current_level = 0
+
+    # Determine current level and remaining XP for the next level
+    while xp >= total_xp_for_next_level:
+        level += 1
+        total_xp_for_current_level = total_xp_for_next_level
+        total_xp_for_next_level += 50 + (level - 1) * 3  # XP for next level increases by 3 per level
+
+    # Calculate remaining XP and XP needed for the next level
+    remaining_xp = xp - total_xp_for_current_level
+    xp_for_next_level = total_xp_for_next_level - total_xp_for_current_level
+
+    return level, remaining_xp, xp_for_next_level
+
+
+
+
 @bot.tree.command(name="init", description="Starts up the leveling system if it hasn't already.")
 async def init(interaction: discord.Interaction):
     if interaction.user.guild_permissions.administrator or interaction.user.id == ENABLED_USER_ID:
@@ -885,7 +925,7 @@ async def init(interaction: discord.Interaction):
 
 
 
-@bot.tree.command(name="editxp", description="Edit a user's XP. Use 'reset' to reset or 'infinite' for infinite XP.")
+@bot.tree.command(name="editxp", description="Edit a user's XP. Use 'reset' to reset, or 'infinite' for infinite XP.")
 @app_commands.describe(user="The user whose XP to edit", amount="The XP amount to add, 'reset' to reset, or 'infinite' for infinite XP")
 async def editxp(interaction: discord.Interaction, user: discord.Member, amount: str):
     if interaction.user.guild_permissions.administrator or interaction.user.id == ENABLED_USER_ID:
@@ -901,15 +941,9 @@ async def editxp(interaction: discord.Interaction, user: discord.Member, amount:
                 else:
                     new_exp = max(0, result[1] + int(amount))  # Ensure the new XP is non-negative
 
-                # Calculate the old and new levels
-                old_level = (result[1] // 50) + 1 if result[1] is not None else "infinite"
-                new_level = (new_exp // 50) + 1 if new_exp != 999999 else "infinite"
-                remaining_exp_old = result[1] % 50 if result[1] is not None else "infinite"  # Calculate remaining XP for the current level (old)
-                remaining_exp_new = new_exp % 50 if new_exp != 999999 else "infinite"  # Calculate remaining XP for the current level (new)
-
-                # Cap the XP required for leveling up at 50
-                next_level_exp_old = min((old_level * 50), 50) if old_level != "infinite" else "infinite"  # Cap the next level XP at 50
-                next_level_exp_new = min((new_level * 50), 50) if new_level != "infinite" else "infinite"  # Cap the next level XP at 50
+                # Use get_level_and_remaining_exp to calculate old and new levels
+                old_level, remaining_exp_old, next_level_exp_old = get_level_and_remaining_exp(result[1])
+                new_level, remaining_exp_new, next_level_exp_new = get_level_and_remaining_exp(new_exp)
 
                 cur.execute(f"UPDATE GUILD_{interaction.guild.id} SET exp={new_exp} WHERE user_id={user.id}")
                 con.commit()
@@ -918,10 +952,8 @@ async def editxp(interaction: discord.Interaction, user: discord.Member, amount:
                 embed = discord.Embed(title="XP and Level Change", color=discord.Color.gold())
                 embed.set_thumbnail(url=user.avatar.url)
                 embed.add_field(name="User", value=user.mention, inline=False)
-                embed.add_field(name="Old XP", value=f"{remaining_exp_old}/50 (Level {old_level})",
-                                inline=False)
-                embed.add_field(name="New XP", value=f"{remaining_exp_new}/50 (Level {new_level})",
-                                inline=False)
+                embed.add_field(name="Old XP", value=f"{remaining_exp_old}/{next_level_exp_old} (Level {old_level})", inline=False)
+                embed.add_field(name="New XP", value=f"{remaining_exp_new}/{next_level_exp_new} (Level {new_level})", inline=False)
 
                 await interaction.response.send_message(embed=embed)
             else:
@@ -931,6 +963,8 @@ async def editxp(interaction: discord.Interaction, user: discord.Member, amount:
             myLogger.error(f"SQLite Error: {e}")
     else:
         await interaction.response.send_message("You do not have permission to use this command.")
+
+
 
 
 
@@ -953,13 +987,11 @@ async def xp(interaction: discord.Interaction, user: discord.User = None):
                 remaining_exp = "infinite"
                 next_level_exp = "infinite"
             else:
-                level = (exp // 50) + 1
-                remaining_exp = exp % 50
-                next_level_exp = 50 - remaining_exp if exp < 50 else 50 - (exp % 50)
+                level, remaining_exp, next_level_exp = get_level_and_remaining_exp(exp)
 
             embed = discord.Embed(title=f"{user.display_name}", color=discord.Color.green())
             embed.set_thumbnail(url=user.avatar.url)
-            embed.add_field(name="XP", value=f"{remaining_exp}/50 XP" if exp != 999999 else "infinite", inline=True)
+            embed.add_field(name="XP", value=f"{remaining_exp}/{next_level_exp} XP" if exp != 999999 else "infinite", inline=True)
             embed.add_field(name="Level", value=level, inline=True)
 
             await interaction.response.send_message(embed=embed)
@@ -967,6 +999,8 @@ async def xp(interaction: discord.Interaction, user: discord.User = None):
             await interaction.response.send_message("Hmm no such user in the database")
     except sqlite3.OperationalError:
         await interaction.response.send_message("Database not initialized")
+
+
 
 
 
@@ -982,7 +1016,7 @@ async def leaderboard(interaction: discord.Interaction):
             LIMIT 5;
         """)
         results = cur.fetchall()
-        
+
         # Log results for debugging
         myLogger.info(f"Leaderboard Query Results: {results}")
 
@@ -996,20 +1030,19 @@ async def leaderboard(interaction: discord.Interaction):
                         level_display = "infinite"
                         exp_display = "infinite"
                     else:
-                        level = (exp // 50) + 1
-                        remaining_exp = exp % 50
+                        level, remaining_exp, next_level_exp = get_level_and_remaining_exp(exp)
                         level_display = level
-                        exp_display = f"{remaining_exp} / 50"
+                        exp_display = f"{remaining_exp} / {next_level_exp}"
 
                     embed.add_field(
                         name=f"{index}. {user.display_name}",
-                        value=f"XP: {exp_display} | Level: {level_display}",
+                        value=f"    XP: {exp_display} \n    Level: {level_display}",
                         inline=False
                     )
                 except discord.NotFound:
                     embed.add_field(
                         name=f"{index}. [User not found]",
-                        value=f"XP: {'infinite' if exp == 999999 else exp} | Level: {'infinite' if exp == 999999 else 'Unknown'}",
+                        value=f"    XP: {'infinite' if exp == 999999 else exp} \n    Level: {'infinite' if exp == 999999 else 'Unknown'}",
                         inline=False
                     )
                 except Exception as e:
@@ -1024,9 +1057,10 @@ async def leaderboard(interaction: discord.Interaction):
         else:
             await interaction.response.send_message("No users found in the database.")
     except sqlite3.OperationalError:
-        await interaction.response.send_message("Database not initialized")
+        await interaction.response.send_message("Database not initialized.")
     except Exception as e:
         myLogger.error(f"An error has occurred: {e}")
+
 
 
 
