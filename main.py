@@ -889,6 +889,9 @@ def get_level_and_remaining_exp(xp):
     :param xp: The current XP of the user.
     :return: A tuple containing the user's level, the remaining XP, and XP needed for the next level.
     """
+    if xp == 999999:  # Check for infinite XP case
+        return "infinite", "infinite", "infinite"
+
     level = 1
     total_xp_for_next_level = 50  # Initial XP required for level 2
     total_xp_for_current_level = 0
@@ -904,6 +907,7 @@ def get_level_and_remaining_exp(xp):
     xp_for_next_level = total_xp_for_next_level - total_xp_for_current_level
 
     return level, remaining_xp, xp_for_next_level
+
 
 
 
