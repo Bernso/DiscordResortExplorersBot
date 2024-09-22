@@ -237,14 +237,14 @@ async def on_ready():
         myLogger.error("Could not send verification message because VERIFY_CHANNEL is None or not set correctly.")
 
     # Bot status update
-    rex_channel = bot.get_channel(1284214603856744549)
-    if rex_channel:
-        embed = discord.Embed(
-            title="Bot Status",
-            description="The bot is currently **online**.",
-            color=discord.Color.green()
-        )
-        await rex_channel.send(embed=embed)
+    #rex_channel = bot.get_channel(1284214603856744549)
+    #if rex_channel:
+    #    embed = discord.Embed(
+    #        title="Bot Status",
+    #        description="The bot is currently **online**.",
+    #        color=discord.Color.green()
+    #    )
+    #    await rex_channel.send(embed=embed)
 
     # Change avatar (only if necessary)
     try:
