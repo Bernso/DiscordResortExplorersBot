@@ -363,12 +363,12 @@ async def eos(interaction: discord.Interaction):
         
         
         # List of channels to send the offline message
-        special_channels = [1284214603856744549]
-        
-        for ch_id in special_channels:
-            channel = bot.get_channel(ch_id)
-            if channel:
-                await channel.send(embed=embed)
+        #special_channels = [1284214603856744549]
+        #
+        #for ch_id in special_channels:
+        #    channel = bot.get_channel(ch_id)
+        #    if channel:
+        #        await channel.send(embed=embed)
         
         
         # List of channels to send the offline message
@@ -531,6 +531,73 @@ async def unban(interaction: discord.Interaction, user_id: str):
     else:
         # If the user doesn't have the necessary permissions, reply with an error message
         await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+
+
+
+# Slash command to delete all messages from a specific user in a selected channel
+@bot.tree.command(name="delete_user_messages", description="Delete all messages from a specific user in a selected channel")
+@app_commands.describe(user="The user whose messages you want to delete")
+@app_commands.describe(channel="The channel where messages should be deleted")
+@app_commands.describe(limit="Number of messages to scan in the channel (default: 100)")
+async def delete_user_messages(interaction: discord.Interaction, user: discord.User, channel: discord.TextChannel, limit: int = 100):
+    if interaction.user.guild_permissions.administrator or interaction.user.id == ENABLED_USER_ID:
+        await interaction.response.defer(thinking=True)  # Defers the response while processing
+        deleted_messages = 0
+
+        try:
+            # Ensure the bot can access the channel
+            await channel.send("Scanning for messages...")  # Check channel permission with a test message
+            async for message in channel.history(limit=limit):
+                if message.author == user:
+                    await message.delete()
+                    deleted_messages += 1
+
+            await interaction.followup.send(f"Deleted {deleted_messages} messages from {user.mention} in {channel.mention}.")
+        
+        except discord.Forbidden:
+            await interaction.followup.send("I don't have permission to delete messages in this channel.")
+        except discord.HTTPException as e:
+            await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+# Slash command to delete all messages from a specific user in all channels
+@bot.tree.command(name="delete_user_msgs_all", description="Delete all messages from a specific user in the entire server")
+@app_commands.describe(user="The user whose messages you want to delete")
+@app_commands.describe(limit="Number of messages to scan per channel (default: 100)")
+async def delete_user_messages_all_channels(interaction: discord.Interaction, user: discord.User, limit: int = 100):
+    if interaction.user.guild_permissions.administrator or interaction.user.id == ENABLED_USER_ID:    
+        await interaction.response.defer(thinking=True)  # Defer the response while processing
+        deleted_messages = 0
+        
+        # Check if the command is issued in a guild
+        if not interaction.guild:
+            await interaction.followup.send("This command can only be used in a server.")
+            return
+
+        try:
+            # Loop through each channel in the guild
+            for channel in interaction.guild.text_channels:
+                try:
+                    # Ensure the bot can access the channel
+                    await channel.send("Scanning for messages...")  # Check channel permission with a test message
+                    # Scan through the channel's message history
+                    async for message in channel.history(limit=limit):
+                        if message.author == user:
+                            await message.delete()
+                            deleted_messages += 1
+                except discord.Forbidden:
+                    # If the bot doesn't have permission in this channel, skip it
+                    continue
+                except discord.HTTPException as e:
+                    # Handle other errors that might occur during message deletion
+                    continue
+            
+            await interaction.followup.send(f"Deleted {deleted_messages} messages from {user.mention} across all channels.")
+        
+        except discord.Forbidden:
+            await interaction.followup.send("I don't have permission to delete messages.")
+        except discord.HTTPException as e:
+            await interaction.followup.send(f"An error occurred: {str(e)}")
 
 
 
